@@ -1,0 +1,101 @@
+---
+title: "lab5_Addison_Schmidt"
+author: "Addison Schmidt"
+date: "11/16/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+acc = read.csv("https://raw.githubusercontent.com/xdaiISU/ds202materials/master/hwlabs/fars2017/accident.csv", stringsAsFactors = FALSE)
+people = read.csv("https://raw.githubusercontent.com/xdaiISU/ds202materials/master/hwlabs/fars2017/person.csv", stringsAsFactors = F)
+library(tidyverse)
+```
+
+1.
+```{r}
+dead = people %>%
+  filter(INJ_SEV == 4)
+```
+
+2.
+```{r}
+mostDanger = people %>%
+  drop_na(MAKE) %>%
+  drop_na(STATE) %>%
+  group_by(STATE, MAKE) %>%
+  summarize(n = n()) %>%
+  arrange(-n)
+mostDanger = mostDanger[!duplicated(mostDanger$STATE), ]
+```
+
+3. By this definition of "most dangerous", it msot likely really means "most popular" since cars driven more will be involved in more accidents. From this graph, we see that the "most dangerous" cars tend to be 20 in the midwest, and 12 in the west and on the east coast. 49 appears in California and the northern east cost.
+```{r}
+library(readxl)
+countyCodes = read_xlsx("./FRPP_GLC_-_United_StatesNov42021.xlsx")
+countyCodes
+stateCodes = countyCodes[!duplicated(countyCodes$`State Name`), 2:3] %>%
+  rename(state = `State Name`) %>%
+  rename(STATE = `State Code`)
+stateCodes$STATE = as.integer(stateCodes$STATE)
+stateCodes
+states = map_data("state")
+
+dangerMap = mostDanger %>%
+  left_join(stateCodes, by="STATE")
+dangerMap$state = tolower(dangerMap$state)
+
+locs = states %>%
+  group_by(region) %>%
+  summarize(long = mean(long), lat=mean(lat))
+dangerMap = dangerMap %>% 
+  inner_join(locs, by=c("state"="region"))
+
+ggplot(states, aes(x = long, y = lat)) + geom_polygon(aes(group = group)) + geom_text(aes(label=MAKE), color="white", data=dangerMap)
+```
+
+4.
+```{r}
+accPeo = people %>%
+  inner_join(acc)
+```
+
+5. In these results, we see that Saturday has the most accidents, with Friday second and Sunday third. 4-5pm has the most accidents of any time period in the day, and men are invloved in almost twice as many accidents as women.
+```{r}
+accPeo = accPeo %>%
+  filter(HOUR < 25) %>%
+  filter(SEX < 3)
+wkdy = accPeo %>%
+  group_by(DAY_WEEK) %>%
+  summarize(n = n())
+hr = accPeo %>%
+  group_by(HOUR) %>%
+  summarize(n = n())
+sex = accPeo %>%
+  group_by(SEX) %>%
+  summarize(n = n())
+wkdy
+hr
+sex
+
+ggplot(accPeo, aes(x = DAY_WEEK)) + geom_bar()
+ggplot(accPeo, aes(x = HOUR)) + geom_bar()
+ggplot(accPeo, aes(x = SEX)) + geom_bar()
+```
+
+6. In this map, we see that TExas, California, and Florida have a lot of automobile deaths, while states with lower populations have fewer. This is unsurprising as more people is correlated with more driving, is correlated with more deaths.
+```{r}
+deadMap = dead %>%
+  group_by(STATE) %>%
+  summarize(n = n()) %>%
+  left_join(stateCodes, by="STATE")
+deadMap$state = tolower(deadMap$state)
+
+deadMap = deadMap %>% 
+  inner_join(states, by=c("state"="region"))
+ggplot(deadMap, aes(x = long, y = lat)) + geom_polygon(aes(group=group, fill=n))
+```
